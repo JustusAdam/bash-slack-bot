@@ -7,7 +7,7 @@ import           Control.Applicative.Unicode
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Unicode
-import           Data.ByteString.Char8       hiding (putStrLn, unlines)
+import           Data.ByteString.Char8       as C hiding (putStrLn, unlines)
 import           Data.Maybe
 import           Data.Yaml
 import           Network.Browser
@@ -21,6 +21,7 @@ import           Network.Wai.Parse
 import           Prelude.Unicode
 import           System.Environment
 import           Text.Printf
+import Data.Char
 
 
 tryCommit = True
@@ -47,7 +48,7 @@ data AppSettings = AppSettings { port             ∷ Int
 
 addNew
   (AppSettings { username = user, password = passwd, uri = uri })
-  (HookData { text = text })
+  (HookData { command = cmd, text = text })
   = do
     print req
     browse $ do
@@ -62,7 +63,7 @@ addNew
         Form
           POST
           uri
-          [ ("rash_quote", unpack text)
+          [ ("rash_quote", unpack $ C.dropWhile isSpace $ C.drop (C.length cmd) text)
           , ("submit", "Add Quote")
           ]
 
