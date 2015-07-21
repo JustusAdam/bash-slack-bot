@@ -40,7 +40,7 @@ data AppSettings = AppSettings { port :: Int
 
 
 addNew (AppSettings { username = user, password = passwd }) (HookData { text = text }) = do
-  let url = "http://" ⧺ user ⧺ ":" ⧺ passwd ⧺ "bash.fsrleaks.de/?add"
+  let url = "http://" ⧺ user ⧺ ":" ⧺ passwd ⧺ "@bash.fsrleaks.de/?add"
   let contentType = "application/x-www-form-urlencoded"
   let body = "rash_quote=" ++ unpack text ++ "\nsubmit=Add Quote\n"
   print =<< simpleHTTP (
