@@ -1,6 +1,20 @@
+# All the following fields are required
+
+# port for the server to bind to
 port: 50908
-token: ""
+
+# bash login user
 username: ""
+
+# bash login password
 password: ""
+
+# bash url
+# must be a valid URI
 target: "url"
-targetRealm: "string"
+
+# All the following fields are optional
+
+# slack verification api token
+# optional, but note that not providing this token is a security vulnerability
+token: "" # optional

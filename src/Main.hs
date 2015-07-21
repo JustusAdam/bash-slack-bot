@@ -40,7 +40,7 @@ data HookData = HookData { hookDataToken ∷ ByteString
 
 
 data AppSettings = AppSettings { port             ∷ Int
-                               , appSettingsToken ∷ ByteString
+                               , appSettingsToken ∷ Maybe ByteString
                                , password         ∷ String
                                , username         ∷ String
                                , uri              ∷ URI
@@ -70,7 +70,7 @@ addNew
 instance FromJSON AppSettings where
   parseJSON (Object o) = AppSettings
     <$> o .: "port"
-    ⊛ fmap pack (o .: "token")
+    ⊛ (fmap $ fmap pack) (o .:? "token")
     ⊛ o .: "password"
     ⊛ o .: "username"
     ⊛ fmap (fromJust ∘ parseURI) (o .: "target")
@@ -89,17 +89,18 @@ app settings@(AppSettings { appSettingsToken = expectedToken }) req respond = do
   case mpostData of
     Nothing → respondFail
     Just postData@(HookData { hookDataToken = token, command = command, text = text }) →
-      if expectedToken ≢ token
-        then respondFail
-        else
+      if verifier token
+        then
           case lookup command commands of
             Nothing → respondFail
             Just action → do
               print postData
               action settings postData
               respondSuccess
+        else respondFail
 
   where
+    verifier = maybe (const True) (≡) expectedToken
     respondSuccess =
       respond $ responseLBS status200 [("Content-Type", "application/json")] $ encodeUtf8 "{\"text\":\"Yeey, new quotes!!! Thank you 😃\"}"
     respondFail =
