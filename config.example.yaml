@@ -2,3 +2,5 @@ port: 50908
 token: ""
 username: ""
 password: ""
+target: "url"
+targetRealm: "string"

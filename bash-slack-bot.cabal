@@ -28,6 +28,7 @@ executable bash-slack-bot
     yaml,
     bytestring,
     base-unicode-symbols,
-    http-types
+    http-types,
+    network-uri
   hs-source-dirs:      src
   default-language:    Haskell2010
