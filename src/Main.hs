@@ -10,7 +10,7 @@ import Network.Browser
 import Network.HTTP.Auth
 import Network.Wai.Parse
 import Network.Wai.Handler.Warp
-import Data.ByteString.Char8 hiding (putStrLn)
+import Data.ByteString.Char8 hiding (putStrLn, unlines)
 import Prelude.Unicode
 import Data.Yaml
 import System.Environment
@@ -19,6 +19,11 @@ import Control.Monad.Unicode
 import Control.Applicative
 import Control.Applicative.Unicode
 import Data.Maybe
+import Control.Monad.IO.Class
+import Text.Printf
+
+
+tryCommit = True
 
 
 commands ∷ [(ByteString, AppSettings → HookData → IO ())]
@@ -37,19 +42,22 @@ data AppSettings = AppSettings { port ∷ Int
                                , password ∷ String
                                , username ∷ String
                                , uri ∷ URI
-                               , targetRealm :: String
                                } deriving (Show)
 
 
 addNew
-  (AppSettings { username = user, password = passwd, uri = uri, targetRealm = realm })
+  (AppSettings { username = user, password = passwd, uri = uri })
   (HookData { text = text })
-  =
-    print req ≫
-    (print =≪ browse (addAuthority authority ≫ request req))
+  = do
+    print req
+    browse $ do
+      setAuthorityGen (\_ _ → return $ return (user, passwd))
+      setAllowBasicAuth True
+      request req
+      liftIO $ putStrLn "success"
     where
       req = formToRequest body
-      authority = AuthBasic { auRealm = realm, auUsername = user, auPassword = passwd, auSite = uri }
+      -- authority = AuthBasic { auRealm = realm, auUsername = user, auPassword = passwd, auSite = uri }
       body =
         Form
           POST
@@ -66,7 +74,6 @@ instance FromJSON AppSettings where
     ⊛ o .: "password"
     ⊛ o .: "username"
     ⊛ fmap (fromJust ∘ parseURI) (o .: "target")
-    ⊛ o .: "targetRealm"
 
 
 parseData params = HookData
@@ -90,10 +97,10 @@ app settings@(AppSettings { appSettingsToken = expectedToken }) req respond = do
             Just action → do
               print postData
               action settings postData
-              respond $ responseLBS status200 [("Content-Type", "application/json")] "Yeey, new quotes!!!"
+              respond $ responseLBS status200 [("Content-Type", "application/json")] "{\"text\":\"Yeey, new quotes!!! Thank you 😃\"}"
   where
     respondFail =
-      respond $ responseLBS badRequest400 [] ""
+      respond $ responseLBS badRequest400 [] "Sorry, something went wrong 😐"
 
 
 main = do
