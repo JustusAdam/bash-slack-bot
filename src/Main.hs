@@ -28,14 +28,14 @@ commands =
 data HookData = HookData { hookDataToken :: ByteString
                          , command :: ByteString
                          , text :: ByteString
-                         }
+                         } deriving (Show)
 
 
 data AppSettings = AppSettings { port :: Int
                                , appSettingsToken :: ByteString
                                , password :: String
                                , username :: String
-                               }
+                               } deriving (Show)
 
 
 
@@ -43,7 +43,7 @@ addNew (AppSettings { username = user, password = passwd }) (HookData { text = t
   let url = "http://" ⧺ user ⧺ ":" ⧺ passwd ⧺ "bash.fsrleaks.de/?add"
   let contentType = "application/x-www-form-urlencoded"
   let body = "rash_quote=" ++ unpack text ++ "\nsubmit=Add Quote\n"
-  void $ simpleHTTP $
+  print $ simpleHTTP $
     postRequestWithBody
       url
       contentType
@@ -80,6 +80,7 @@ app settings@(AppSettings { appSettingsToken = expectedToken }) req respond = do
           case lookup command commands of
             Nothing -> respondFail
             Just action -> do
+              print postData
               action settings postData
               respond $ responseLBS status200 [("Content-Type", "application/json")] "Yeey, new quotes!!!"
   where
@@ -90,7 +91,9 @@ app settings@(AppSettings { appSettingsToken = expectedToken }) req respond = do
 main = do
   [settingsFile] <- getArgs
   sf <- decodeFile settingsFile
-  maybe
-    (putStrLn "could not read settings")
-    (run <$> port ⊛ app)
-    sf
+  case sf of
+    Nothing -> putStrLn "could not read settings"
+    Just conf -> do
+      putStrLn "Starting server with config:"
+      print conf
+      run (port conf) (app conf)
