@@ -1,26 +1,26 @@
-{-# LANGUAGE UnicodeSyntax #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE UnicodeSyntax     #-}
 
 
-import Network.Wai
-import Network.HTTP.Types hiding (POST)
-import Network.URI
-import Network.HTTP hiding (password, port)
-import Network.Browser
-import Network.HTTP.Auth
-import Network.Wai.Parse
-import Network.Wai.Handler.Warp
-import Data.ByteString.Char8 hiding (putStrLn, unlines)
-import Prelude.Unicode
-import Data.Yaml
-import System.Environment
-import Control.Monad
-import Control.Monad.Unicode
-import Control.Applicative
-import Control.Applicative.Unicode
-import Data.Maybe
-import Control.Monad.IO.Class
-import Text.Printf
+import           Control.Applicative
+import           Control.Applicative.Unicode
+import           Control.Monad
+import           Control.Monad.IO.Class
+import           Control.Monad.Unicode
+import           Data.ByteString.Char8       hiding (putStrLn, unlines)
+import           Data.Maybe
+import           Data.Yaml
+import           Network.Browser
+import           Network.HTTP                hiding (password, port)
+import           Network.HTTP.Auth
+import           Network.HTTP.Types          hiding (POST)
+import           Network.URI
+import           Network.Wai
+import           Network.Wai.Handler.Warp
+import           Network.Wai.Parse
+import           Prelude.Unicode
+import           System.Environment
+import           Text.Printf
 
 
 tryCommit = True
@@ -32,16 +32,16 @@ commands =
 
 
 data HookData = HookData { hookDataToken ∷ ByteString
-                         , command ∷ ByteString
-                         , text ∷ ByteString
+                         , command       ∷ ByteString
+                         , text          ∷ ByteString
                          } deriving (Show)
 
 
-data AppSettings = AppSettings { port ∷ Int
+data AppSettings = AppSettings { port             ∷ Int
                                , appSettingsToken ∷ ByteString
-                               , password ∷ String
-                               , username ∷ String
-                               , uri ∷ URI
+                               , password         ∷ String
+                               , username         ∷ String
+                               , uri              ∷ URI
                                } deriving (Show)
 
 
