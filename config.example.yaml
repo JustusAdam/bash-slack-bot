@@ -18,3 +18,7 @@ target: "url"
 # slack verification api token
 # optional, but note that not providing this token is a security vulnerability
 token: "" # optional
+
+# minimum required quote length
+# if provided will send the user an error message if the quote is too short
+min_quote_length: 15
