@@ -62,7 +62,7 @@ addNew
       return "Yeey, new quotes!!! Thank you 😃"
     else
       return $ "Your quote is too short, the bash will reject it 😐. "
-        <> maybe "" (\req -> "Just make it like at least " <> T.pack (show (req - C.length text)) <> " characters longer.") mql
+        <> maybe "" (\req -> "Just make it like at least " <> T.pack (show (req - C.length quote)) <> " characters longer.") mql
     where
       quote = C.dropWhile isSpace $ C.drop (C.length cmd) text
       lengthVerifier = maybe (const True) (\a b -> a ≤ C.length b) mql
