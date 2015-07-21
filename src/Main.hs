@@ -4,7 +4,7 @@
 
 import Network.Wai
 import Network.HTTP.Types
-import Network.HTTP hiding (password)
+import Network.HTTP hiding (password, port)
 import Network.Wai.Parse
 import Network.Wai.Handler.Warp
 import Data.ByteString.Char8 hiding (putStrLn)
@@ -13,6 +13,7 @@ import Data.Yaml
 import System.Environment
 import Control.Monad
 import Control.Applicative
+import Control.Applicative.Unicode
 
 
 commands :: [(ByteString, AppSettings → HookData → IO ())]
@@ -91,5 +92,5 @@ main = do
   sf <- decodeFile settingsFile
   maybe
     (putStrLn "could not read settings")
-    (run defaultPort ∘ app)
+    (run <$> port ⊛ app)
     sf
