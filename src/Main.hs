@@ -43,11 +43,12 @@ addNew (AppSettings { username = user, password = passwd }) (HookData { text = t
   let url = "http://" ⧺ user ⧺ ":" ⧺ passwd ⧺ "bash.fsrleaks.de/?add"
   let contentType = "application/x-www-form-urlencoded"
   let body = "rash_quote=" ++ unpack text ++ "\nsubmit=Add Quote\n"
-  print $ simpleHTTP $
+  print =<< simpleHTTP (
     postRequestWithBody
       url
       contentType
       body
+    )
   return ()
 
 
