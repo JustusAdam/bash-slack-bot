@@ -27,6 +27,7 @@ executable bash-slack-bot
     warp,
     yaml,
     bytestring,
-    base-unicode-symbols
+    base-unicode-symbols,
+    http-types
   hs-source-dirs:      src
   default-language:    Haskell2010

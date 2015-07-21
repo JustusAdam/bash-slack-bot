@@ -12,6 +12,7 @@ import Prelude.Unicode
 import Data.Yaml
 import System.Environment
 import Control.Monad
+import Control.Applicative
 
 
 commands :: [(ByteString, AppSettings → HookData → IO ())]
