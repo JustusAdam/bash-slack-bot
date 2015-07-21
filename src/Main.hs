@@ -8,7 +8,9 @@ import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Unicode
 import           Data.ByteString.Char8       as C hiding (putStrLn, unlines)
+import           Data.Char
 import           Data.Maybe
+import           Data.Text.Lazy.Encoding
 import           Data.Yaml
 import           Network.Browser
 import           Network.HTTP                hiding (password, port)
@@ -21,7 +23,6 @@ import           Network.Wai.Parse
 import           Prelude.Unicode
 import           System.Environment
 import           Text.Printf
-import Data.Char
 
 
 tryCommit = True
@@ -49,9 +50,7 @@ data AppSettings = AppSettings { port             ∷ Int
 addNew
   (AppSettings { username = user, password = passwd, uri = uri })
   (HookData { command = cmd, text = text })
-  = do
-    print req
-    browse $ do
+  = browse $ do
       setAuthorityGen (\_ _ → return $ return (user, passwd))
       setAllowBasicAuth True
       request req
@@ -98,10 +97,13 @@ app settings@(AppSettings { appSettingsToken = expectedToken }) req respond = do
             Just action → do
               print postData
               action settings postData
-              respond $ responseLBS status200 [("Content-Type", "application/json")] "{\"text\":\"Yeey, new quotes!!! Thank you 😃\"}"
+              respondSuccess
+
   where
+    respondSuccess =
+      respond $ responseLBS status200 [("Content-Type", "application/json")] $ encodeUtf8 "{\"text\":\"Yeey, new quotes!!! Thank you 😃\"}"
     respondFail =
-      respond $ responseLBS badRequest400 [] "Sorry, something went wrong 😐"
+      respond $ responseLBS badRequest400 [] $ encodeUtf8 "{\"text\": \"Sorry, something went wrong 😐\"}"
 
 
 main = do
