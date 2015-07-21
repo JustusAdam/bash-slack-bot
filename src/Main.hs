@@ -14,6 +14,7 @@ import           Data.Monoid
 import           Data.Text.Lazy              as T hiding (unpack)
 import           Data.Text.Lazy.Encoding
 import           Data.Yaml
+import Data.Function
 import           Network.Browser
 import           Network.HTTP                hiding (password, port)
 import           Network.HTTP.Auth
@@ -25,6 +26,7 @@ import           Network.Wai.Parse
 import           Prelude.Unicode
 import           System.Environment
 import           Text.Printf
+import System.Eval.Haskell
 
 
 tryCommit = True
@@ -32,7 +34,9 @@ tryCommit = True
 
 commands ∷ [(ByteString, AppSettings → HookData → IO Text)]
 commands =
-  [ ("bashthis:", addNew) ]
+  [ ("bashthis:", addNew)
+  , ("evaluate:", evaluateCode)
+  ]
 
 
 data HookData = HookData { hookDataToken ∷ ByteString
@@ -50,6 +54,18 @@ data AppSettings = AppSettings { port             ∷ Int
                                } deriving (Show)
 
 
+truncateCommand command = C.dropWhile isSpace . C.drop (C.length command)
+
+
+evaluateHaskell = fmap (maybe "Evaluation failed" show) . flip unsafeEval ["Prelude"]
+
+
+evaluableLanguages =
+  [ ("hs", evaluateHaskell)
+  , ("haskell", evaluateHaskell)
+  ]
+
+
 addNew
   (AppSettings { username = user, password = passwd, uri = uri, minQuoteLength = mql })
   (HookData { command = cmd, text = text })
@@ -64,7 +80,7 @@ addNew
       return $ "Your quote is too short, the bash will reject it 😐. "
         <> maybe "" (\req -> "Just make it like at least " <> T.pack (show (req - C.length quote)) <> " characters longer.") mql
     where
-      quote = C.dropWhile isSpace $ C.drop (C.length cmd) text
+      quote = truncateCommand cmd text
       lengthVerifier = maybe (const True) (\a b -> a ≤ C.length b) mql
       req = formToRequest body
       -- authority = AuthBasic { auRealm = realm, auUsername = user, auPassword = passwd, auSite = uri }
@@ -75,6 +91,21 @@ addNew
           [ ("rash_quote", unpack quote)
           , ("submit", "Add Quote")
           ]
+
+
+evaluateCode
+  _
+  (HookData { command = cmd, text = text })
+  =
+    case C.unwords $ truncateCommand cmd text of
+      t@(lang:r) ->
+        let
+          code = truncateCommand lang t
+        in
+          maybe "Unknown Language" (fmap (wrapCode . T.pack) . (code =<<)) $ lookup lang evaluableLanguages
+      _ -> return "You need provide a language"
+    where
+      wrapCode c = "`" <> c <> "`"
 
 
 instance FromJSON AppSettings where
