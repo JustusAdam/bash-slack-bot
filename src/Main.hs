@@ -11,6 +11,7 @@ import           Data.ByteString.Char8       as C hiding (putStrLn, unlines)
 import           Data.Char
 import           Data.Maybe
 import           Data.Monoid
+import           Data.Monoid.Unicode
 import           Data.Text.Lazy              as T hiding (unpack)
 import           Data.Text.Lazy.Encoding
 import           Data.Yaml
@@ -29,7 +30,7 @@ import           Text.Printf
 import System.Eval.Haskell
 
 
-tryCommit = True
+a & b = b a
 
 
 commands ∷ [(ByteString, AppSettings → HookData → IO Text)]
@@ -51,13 +52,17 @@ data AppSettings = AppSettings { port             ∷ Int
                                , username         ∷ String
                                , uri              ∷ URI
                                , minQuoteLength   ∷ Maybe Int
+                               , logfile          ∷ Maybe FilePath
                                } deriving (Show)
 
 
 truncateCommand command = C.dropWhile isSpace . C.drop (C.length command)
 
 
-evaluateHaskell = fmap (maybe "Evaluation failed" show) . flip unsafeEval ["Prelude"]
+evaluateHaskell ∷ String → IO String
+evaluateHaskell code = do
+  evaluated <- unsafeEval ("show $ " ⊕ code) ["Prelude"]
+  return $ fromMaybe "Evaluation failed" evaluated
 
 
 evaluableLanguages =
@@ -66,19 +71,30 @@ evaluableLanguages =
   ]
 
 
+writeLog ∷ AppSettings → String → IO ()
+writeLog (AppSettings { logfile = (Just f) }) =
+  Prelude.appendFile f
+writeLog _ = const $ return ()
+
+
+showLog ∷ Show s ⇒ AppSettings → s → IO ()
+showLog set = writeLog set ∘ show
+
+
+addNew ∷ AppSettings → HookData → IO Text
 addNew
-  (AppSettings { username = user, password = passwd, uri = uri, minQuoteLength = mql })
+  settings@(AppSettings { username = user, password = passwd, uri = uri, minQuoteLength = mql })
   (HookData { command = cmd, text = text })
   = if lengthVerifier quote
     then browse $ do
       setAuthorityGen (\_ _ → return $ return (user, passwd))
       setAllowBasicAuth True
       request req
-      liftIO $ putStrLn "success"
+      liftIO $ writeLog settings "success"
       return "Yeey, new quotes!!! Thank you 😃"
     else
       return $ "Your quote is too short, the bash will reject it 😐. "
-        <> maybe "" (\req -> "Just make it like at least " <> T.pack (show (req - C.length quote)) <> " characters longer.") mql
+        ⊕ maybe "" (\req -> "Just make it like at least " ⊕ T.pack (show (req - C.length quote)) ⊕ " characters longer.") mql
     where
       quote = truncateCommand cmd text
       lengthVerifier = maybe (const True) (\a b -> a ≤ C.length b) mql
@@ -97,13 +113,16 @@ evaluateCode
   _
   (HookData { command = cmd, text = text })
   =
-    case C.unwords $ truncateCommand cmd text of
-      t@(lang:r) ->
-        let
-          code = truncateCommand lang t
-        in
-          maybe "Unknown Language" (fmap (wrapCode . T.pack) . (code =<<)) $ lookup lang evaluableLanguages
-      _ -> return "You need provide a language"
+    let
+      truncated = truncateCommand cmd text
+    in
+      case C.words truncated of
+        t@(lang:_) ->
+          let
+            code = truncateCommand lang truncated
+          in
+            maybe (return "Unknown Language") (fmap (wrapCode . T.pack) . (C.unpack code &)) $ lookup lang evaluableLanguages
+        _ -> return "You need provide a language"
     where
       wrapCode c = "`" <> c <> "`"
 
@@ -116,8 +135,10 @@ instance FromJSON AppSettings where
     ⊛ o .: "username"
     ⊛ fmap (fromJust ∘ parseURI) (o .: "target")
     ⊛ o .:? "min_quote_length"
+    ⊛ o .:? "logfile"
 
 
+parseData ∷ [(ByteString, ByteString)] → Maybe HookData
 parseData params = HookData
   <$> lookup "token" params
   ⊛ lookup "trigger_word" params
@@ -136,24 +157,25 @@ app settings@(AppSettings { appSettingsToken = expectedToken }) req respond = do
           case lookup command commands of
             Nothing → respondFail
             Just action → do
-              print postData
+              showLog settings postData
               action settings postData ≫= respondSuccess
         else respondFail
 
   where
     verifier = maybe (const True) (≡) expectedToken
     respondSuccess message =
-      respond $ responseLBS status200 [("Content-Type", "application/json")] $ encodeUtf8 $ "{\"text\":\"" <> message <> "\"}"
+      respond $ responseLBS status200 [("Content-Type", "application/json")] $ encodeUtf8 $ "{\"text\":\"" ⊕ message ⊕ "\"}"
     respondFail =
       respond $ responseLBS badRequest400 [] $ encodeUtf8 "{\"text\": \"Sorry, something went wrong 😐\"}"
 
 
+main ∷ IO ()
 main = do
   [settingsFile] ← getArgs
   sf ← decodeFile settingsFile
   case sf of
     Nothing → putStrLn "could not read settings"
     Just conf → do
-      putStrLn "Starting server with config:"
-      print conf
+      writeLog conf "Starting server with config:"
+      showLog conf conf
       run (port conf) (app conf)
