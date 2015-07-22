@@ -11,6 +11,7 @@ import           Data.ByteString.Char8       as C hiding (putStrLn, unlines)
 import           Data.Char
 import           Data.Maybe
 import           Data.Monoid
+import           Data.Monoid.Unicode
 import           Data.Text.Lazy              as T hiding (unpack)
 import           Data.Text.Lazy.Encoding
 import           Data.Yaml
@@ -25,9 +26,6 @@ import           Network.Wai.Parse
 import           Prelude.Unicode
 import           System.Environment
 import           Text.Printf
-
-
-tryCommit = True
 
 
 commands ∷ [(ByteString, AppSettings → HookData → IO Text)]
@@ -50,6 +48,7 @@ data AppSettings = AppSettings { port             ∷ Int
                                } deriving (Show)
 
 
+addNew ∷ AppSettings → HookData → IO Text
 addNew
   (AppSettings { username = user, password = passwd, uri = uri, minQuoteLength = mql })
   (HookData { command = cmd, text = text })
@@ -62,7 +61,7 @@ addNew
       return "Yeey, new quotes!!! Thank you 😃"
     else
       return $ "Your quote is too short, the bash will reject it 😐. "
-        <> maybe "" (\req -> "Just make it like at least " <> T.pack (show (req - C.length quote)) <> " characters longer.") mql
+        ⊕ maybe "" (\req -> "Just make it like at least " ⊕ T.pack (show (req - C.length quote)) ⊕ " characters longer.") mql
     where
       quote = C.dropWhile isSpace $ C.drop (C.length cmd) text
       lengthVerifier = maybe (const True) (\a b -> a ≤ C.length b) mql
@@ -87,6 +86,7 @@ instance FromJSON AppSettings where
     ⊛ o .:? "min_quote_length"
 
 
+parseData ∷ [(ByteString, ByteString)] → Maybe HookData
 parseData params = HookData
   <$> lookup "token" params
   ⊛ lookup "trigger_word" params
@@ -112,11 +112,12 @@ app settings@(AppSettings { appSettingsToken = expectedToken }) req respond = do
   where
     verifier = maybe (const True) (≡) expectedToken
     respondSuccess message =
-      respond $ responseLBS status200 [("Content-Type", "application/json")] $ encodeUtf8 $ "{\"text\":\"" <> message <> "\"}"
+      respond $ responseLBS status200 [("Content-Type", "application/json")] $ encodeUtf8 $ "{\"text\":\"" ⊕ message ⊕ "\"}"
     respondFail =
       respond $ responseLBS badRequest400 [] $ encodeUtf8 "{\"text\": \"Sorry, something went wrong 😐\"}"
 
 
+main ∷ IO ()
 main = do
   [settingsFile] ← getArgs
   sf ← decodeFile settingsFile
