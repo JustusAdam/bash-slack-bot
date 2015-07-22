@@ -45,19 +45,30 @@ data AppSettings = AppSettings { port             ∷ Int
                                , username         ∷ String
                                , uri              ∷ URI
                                , minQuoteLength   ∷ Maybe Int
+                               , logfile          ∷ Maybe FilePath
                                } deriving (Show)
+
+
+writeLog ∷ AppSettings → String → IO ()
+writeLog (AppSettings { logfile = (Just f) }) =
+  Prelude.writeFile f
+writeLog _ = const $ return ()
+
+
+showLog ∷ Show s ⇒ AppSettings → s → IO ()
+showLog set = writeLog set ∘ show
 
 
 addNew ∷ AppSettings → HookData → IO Text
 addNew
-  (AppSettings { username = user, password = passwd, uri = uri, minQuoteLength = mql })
+  settings@(AppSettings { username = user, password = passwd, uri = uri, minQuoteLength = mql })
   (HookData { command = cmd, text = text })
   = if lengthVerifier quote
     then browse $ do
       setAuthorityGen (\_ _ → return $ return (user, passwd))
       setAllowBasicAuth True
       request req
-      liftIO $ putStrLn "success"
+      liftIO $ writeLog settings "success"
       return "Yeey, new quotes!!! Thank you 😃"
     else
       return $ "Your quote is too short, the bash will reject it 😐. "
@@ -84,6 +95,7 @@ instance FromJSON AppSettings where
     ⊛ o .: "username"
     ⊛ fmap (fromJust ∘ parseURI) (o .: "target")
     ⊛ o .:? "min_quote_length"
+    ⊛ o .:? "logfile"
 
 
 parseData ∷ [(ByteString, ByteString)] → Maybe HookData
@@ -105,7 +117,7 @@ app settings@(AppSettings { appSettingsToken = expectedToken }) req respond = do
           case lookup command commands of
             Nothing → respondFail
             Just action → do
-              print postData
+              showLog settings postData
               action settings postData ≫= respondSuccess
         else respondFail
 
@@ -124,6 +136,6 @@ main = do
   case sf of
     Nothing → putStrLn "could not read settings"
     Just conf → do
-      putStrLn "Starting server with config:"
-      print conf
+      writeLog conf "Starting server with config:"
+      showLog conf conf
       run (port conf) (app conf)
