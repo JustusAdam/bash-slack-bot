@@ -9,13 +9,13 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Unicode
 import           Data.ByteString.Char8       as C hiding (putStrLn, unlines)
 import           Data.Char
+import           Data.Function
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Monoid.Unicode
 import           Data.Text.Lazy              as T hiding (unpack)
 import           Data.Text.Lazy.Encoding
 import           Data.Yaml
-import Data.Function
 import           Network.Browser
 import           Network.HTTP                hiding (password, port)
 import           Network.HTTP.Auth
@@ -26,8 +26,8 @@ import           Network.Wai.Handler.Warp
 import           Network.Wai.Parse
 import           Prelude.Unicode
 import           System.Environment
+import           System.Eval.Haskell
 import           Text.Printf
-import System.Eval.Haskell
 
 
 a & b = b a
@@ -158,7 +158,7 @@ app settings@(AppSettings { appSettingsToken = expectedToken }) req respond = do
             Nothing → respondFail
             Just action → do
               showLog settings postData
-              action settings postData ≫= respondSuccess
+              action settings postData >>= respondSuccess
         else respondFail
 
   where
