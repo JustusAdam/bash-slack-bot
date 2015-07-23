@@ -5,6 +5,7 @@
 
 import           Control.Applicative
 import           Control.Applicative.Unicode
+import Control.Arrow hiding (app)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Unicode
@@ -24,6 +25,8 @@ import           Network.Wai.Handler.Warp
 import           Network.Wai.Parse
 import           Prelude.Unicode
 import           System.Environment
+import Text.Printf
+import Prelude as P
 
 
 commands ∷ [(ByteString, AppSettings → HookData → IO Text)]
@@ -126,11 +129,20 @@ app settings@(AppSettings { appSettingsToken = expectedToken }) req respond = do
 
 main ∷ IO ()
 main = do
+  putStrLn "Bash Slack Bot  -- Version: 0.1.0.0"
   [settingsFile] ← getArgs
   sf ← decodeFile settingsFile
   case sf of
     Nothing → putStrLn "could not read settings"
     Just conf → do
-      putStrLn "Starting server with config:"
-      print conf
+      putStrLn "Starting server!"
+      putStrLn
+        $ printf
+          "Port: %d   Token: %s   Target URI: %s   with Username: %s   and Password: %s"
+          (port conf)
+          (maybe "-" (uncurry (⧺) ∘ second (flip P.replicate '*' ∘ P.length) ∘ P.splitAt 6 ∘ C.unpack) $ appSettingsToken conf)
+          (show $ uri conf)
+          (username conf)
+          (P.replicate (P.length $ password conf) '*')
+
       run (port conf) (app conf)
