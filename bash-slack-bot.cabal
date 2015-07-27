@@ -21,6 +21,7 @@ executable bash-slack-bot
   -- other-extensions:
   build-depends:
     base >=4.6 && <4.9,
+    aeson,
     HTTP,
     wai,
     wai-extra,

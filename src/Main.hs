@@ -31,6 +31,7 @@ import           System.Exit
 import qualified System.IO                   as SIO
 import           System.Process
 import           Text.Printf
+import Data.Aeson as JSON
 
 
 log ∷ String → IO ()
@@ -68,6 +69,13 @@ data AppSettings = AppSettings { port             ∷ Int
                                , uri              ∷ URI
                                , minQuoteLength   ∷ Maybe Int
                                } deriving (Show)
+
+
+data SlackResponse = SlackResponse Text deriving (Show)
+
+
+instance ToJSON SlackResponse where
+  toJSON (SlackResponse text) = object [ "text" .= text ]
 
 
 evaluateCode ∷ AppSettings → HookData → IO Text
@@ -180,11 +188,11 @@ app settings@(AppSettings { appSettingsToken = expectedToken }) req respond = do
     verifier = maybe (const True) (≡) expectedToken
     respondSuccess message = do
       logShow json
-      respond $ responseLBS status200 [("Content-Type", "application/json")] $ encodeUtf8 json
+      respond $ responseLBS status200 [("Content-Type", "application/json")] $ JSON.encode json
       where
-        json = "{\"text\":\"" ⊕ T.replace "\"" "\\\"" (T.replace "\\" "\\\\" message) ⊕ "\"}"
+        json = (SlackResponse message)
     respondFail =
-      respond $ responseLBS badRequest400 [] $ encodeUtf8 "{\"text\": \"Sorry, something went wrong 😐\"}"
+      respond $ responseLBS badRequest400 [] $ JSON.encode $ SlackResponse "Sorry, something went wrong 😐"
 
 
 main ∷ IO ()
