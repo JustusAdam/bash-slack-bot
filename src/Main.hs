@@ -178,8 +178,11 @@ app settings@(AppSettings { appSettingsToken = expectedToken }) req respond = do
 
   where
     verifier = maybe (const True) (≡) expectedToken
-    respondSuccess message =
-      respond $ responseLBS status200 [("Content-Type", "application/json")] $ encodeUtf8 $ "{\"text\":\"" ⊕ message ⊕ "\"}"
+    respondSuccess message = do
+      logShow json
+      respond $ responseLBS status200 [("Content-Type", "application/json")] $ encodeUtf8 json
+      where
+        json = "{\"text\":\"" ⊕ T.replace "\"" "\\\"" (T.replace "\\" "\\\\" message) ⊕ "\"}"
     respondFail =
       respond $ responseLBS badRequest400 [] $ encodeUtf8 "{\"text\": \"Sorry, something went wrong 😐\"}"
 
