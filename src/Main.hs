@@ -24,12 +24,21 @@ import           Network.URI
 import           Network.Wai
 import           Network.Wai.Handler.Warp
 import           Network.Wai.Parse
-import           Prelude                     as P
+import           Prelude                     as P hiding (log)
 import           Prelude.Unicode
 import           System.Environment
 import           System.Exit
+import qualified System.IO                   as SIO
 import           System.Process
 import           Text.Printf
+
+
+log ∷ String → IO ()
+log = SIO.hPutStrLn SIO.stderr
+
+
+logShow ∷ Show ς ⇒ ς → IO ()
+logShow = log . show
 
 
 commands ∷ [(ByteString, AppSettings → HookData → IO Text)]
@@ -88,9 +97,9 @@ evaluateRuby settings code = do
   case executed of
     (ExitSuccess, out, err) → return out
     (ExitFailure nr, out, err) → do
-      putStrLn $ "A call to the ruby command failed with code " ⊕ show nr
-      putStrLn $ "stdout: " ⊕ out
-      putStrLn $ "stderr: " ⊕ err
+      log $ "A call to the ruby command failed with code " ⊕ show nr
+      log $ "stdout: " ⊕ out
+      log $ "stderr: " ⊕ err
       return $ "Sorry, but calling 'ruby' with your input failed '" ⊕ err ⊕ "'"
 
 
@@ -109,7 +118,7 @@ addNew
       setAuthorityGen (\_ _ → return $ return (username, password))
       setAllowBasicAuth True
       _ ← request req
-      liftIO $ putStrLn "success"
+      liftIO $ log "success"
       return "Yeey, new quotes!!! Thank you 😃"
     else
       return $ "Your quote is too short, the bash will reject it 😐. "
@@ -161,9 +170,9 @@ app settings@(AppSettings { appSettingsToken = expectedToken }) req respond = do
           case lookup command commands of
             Nothing → respondFail
             Just action → do
-              print postData
+              logShow postData
               action settings postData ≫= respondSuccess
-        else putStrLn "Token did not match" ≫ respondFail
+        else log "Token did not match" ≫ respondFail
 
   where
     verifier = maybe (const True) (≡) expectedToken
@@ -175,14 +184,14 @@ app settings@(AppSettings { appSettingsToken = expectedToken }) req respond = do
 
 main ∷ IO ()
 main = do
-  putStrLn "Bash Slack Bot  -- Version: 0.1.0.0"
+  log "Bash Slack Bot  -- Version: 0.1.0.0"
   [settingsFile] ← getArgs
   sf ← decodeFile settingsFile
   case sf of
-    Nothing → putStrLn "could not read settings"
+    Nothing → log "could not read settings"
     Just conf → do
-      putStrLn "Starting server!"
-      putStrLn
+      log "Starting server!"
+      log
         $ printf
           "Port: %d   Token: %s   Target URI: %s   with Username: %s   and Password: %s"
           (port conf)
