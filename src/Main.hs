@@ -90,18 +90,20 @@ evaluateCode
 
 evaluateRuby ∷ AppSettings → String → IO String
 evaluateRuby settings code = do
-  executed <- readProcessWithExitCode
-                "ruby"
-                (P.map ("-e " ⊕) $ P.lines code)
-                ""
+  log $ "evaluating ruby command: '" ⊕ code ⊕ "'"
+  executed <- readProcessWithExitCode "ruby" args ""
   case executed of
-    (ExitSuccess, out, err) → return out
+    (ExitSuccess, out, err) → do
+      log $ "succeeded with '" ⊕ out ⊕ "'"
+      return out
     (ExitFailure nr, out, err) → do
       log $ "A call to the ruby command failed with code " ⊕ show nr
       log $ "stdout: " ⊕ out
       log $ "stderr: " ⊕ err
       return $ "Sorry, but calling 'ruby' with your input failed '" ⊕ err ⊕ "'"
 
+  where
+    args = P.map ("-e " ⊕) $ P.lines code
 
 
 truncateCommand ∷ ByteString → ByteString → ByteString
@@ -170,7 +172,7 @@ app settings@(AppSettings { appSettingsToken = expectedToken }) req respond = do
           case lookup command commands of
             Nothing → respondFail
             Just action → do
-              logShow postData
+              log $ "received new request for command " ⊕ C.unpack command
               action settings postData ≫= respondSuccess
         else log "Token did not match" ≫ respondFail
 
