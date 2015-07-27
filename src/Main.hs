@@ -5,11 +5,12 @@
 
 import           Control.Applicative
 import           Control.Applicative.Unicode
-import Control.Arrow hiding (app)
+import           Control.Arrow               hiding (app)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Unicode
 import           Data.ByteString.Char8       as C hiding (putStrLn, unlines)
+import qualified Data.ByteString.Lazy        as BL
 import           Data.Char
 import           Data.Maybe
 import           Data.Monoid.Unicode
@@ -23,14 +24,26 @@ import           Network.URI
 import           Network.Wai
 import           Network.Wai.Handler.Warp
 import           Network.Wai.Parse
+import           Prelude                     as P
 import           Prelude.Unicode
 import           System.Environment
-import Text.Printf
-import Prelude as P
+import           System.Exit
+import           System.Process
+import           Text.Printf
 
 
 commands ∷ [(ByteString, AppSettings → HookData → IO Text)]
-commands = [ ("bashthis:", addNew) ]
+commands =
+  [ ("bashthis:", addNew)
+  , ("evaluate:", evaluateCode)
+  ]
+
+
+evaluableLanguages ∷ [(ByteString, AppSettings → String → IO String)]
+evaluableLanguages =
+  [ ("ruby", evaluateRuby )
+  , ("rb", evaluateRuby)
+  ]
 
 
 data HookData = HookData { hookDataToken ∷ ByteString
@@ -48,14 +61,48 @@ data AppSettings = AppSettings { port             ∷ Int
                                } deriving (Show)
 
 
+evaluateCode ∷ AppSettings → HookData → IO Text
+evaluateCode
+  settings
+  (HookData { command, text })
+  =
+    case C.words truncated of
+      (language:_:_) ->
+        maybe
+          (return $ "Sorry, I could not find language '" ⊕ (decodeUtf8 (BL.fromStrict language)) ⊕ "'")
+          (\f -> T.pack <$> f settings (C.unpack $ truncateCommand language truncated))
+          $ lookup language evaluableLanguages
+      [] -> return $ "What language should I interpret? The sytax is '" ⊕ textCommand ⊕ " <language> <code>.'"
+      _ -> return "You didn't give me any code to execute"
+  where
+    truncated = truncateCommand command text
+    textCommand = decodeUtf8 $ BL.fromStrict command
+
+
+evaluateRuby ∷ AppSettings → String → IO String
+evaluateRuby settings code = do
+  executed <- readProcessWithExitCode
+                "ruby"
+                (P.map ("-e " ⊕) $ P.lines code)
+                ""
+  case executed of
+    (ExitSuccess, out, err) → return out
+    (ExitFailure nr, out, err) → do
+      putStrLn $ "A call to the ruby command failed with code " ⊕ show nr
+      putStrLn $ "stdout: " ⊕ out
+      putStrLn $ "stderr: " ⊕ err
+      return $ "Sorry, but calling 'ruby' with your input failed '" ⊕ err ⊕ "'"
+
+
+
 truncateCommand ∷ ByteString → ByteString → ByteString
-truncateCommand command = C.dropWhile isSpace . C.drop (C.length command)
+truncateCommand command = C.dropWhile isSpace ∘ C.drop (C.length command)
 
 
 addNew ∷ AppSettings → HookData → IO Text
 addNew
   (AppSettings { username, password, uri, minQuoteLength })
-  (HookData { command, text})
+  (HookData { command, text })
   =
   if lengthVerifier quote
     then browse $ do
@@ -66,16 +113,15 @@ addNew
       return "Yeey, new quotes!!! Thank you 😃"
     else
       return $ "Your quote is too short, the bash will reject it 😐. "
-        ⊕ maybe "" (\req ->
+        ⊕ maybe "" (\required →
             "Just make it like at least "
-            ⊕ T.pack (show (req - C.length quote))
+            ⊕ T.pack (show (required - C.length quote))
             ⊕ " characters longer."
           ) minQuoteLength
     where
       quote = truncateCommand command text
-      lengthVerifier = maybe (const True) (\a b -> a ≤ C.length b) minQuoteLength
+      lengthVerifier = maybe (const True) (\a b → a ≤ C.length b) minQuoteLength
       req = formToRequest body
-      -- authority = AuthBasic { auRealm = realm, auUsername = user, auPassword = passwd, auSite = uri }
       body =
         Form
           POST
