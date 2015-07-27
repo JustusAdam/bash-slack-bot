@@ -9,9 +9,11 @@ import           Control.Arrow               hiding (app)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.Unicode
+import           Data.Aeson                  as JSON
 import           Data.ByteString.Char8       as C hiding (putStrLn, unlines)
 import qualified Data.ByteString.Lazy        as BL
 import           Data.Char
+import qualified Data.List                   as L
 import           Data.Maybe
 import           Data.Monoid.Unicode
 import           Data.Text.Lazy              as T hiding (unpack)
@@ -31,7 +33,6 @@ import           System.Exit
 import qualified System.IO                   as SIO
 import           System.Process
 import           Text.Printf
-import Data.Aeson as JSON
 
 
 log ∷ String → IO ()
@@ -51,8 +52,10 @@ commands =
 
 evaluableLanguages ∷ [(ByteString, AppSettings → String → IO String)]
 evaluableLanguages =
-  [ ("ruby", evaluateRuby )
+  [ ("ruby", evaluateRuby)
   , ("rb", evaluateRuby)
+  , ("py", evaluatePython)
+  , ("python", evaluatePython)
   ]
 
 
@@ -96,22 +99,40 @@ evaluateCode
     textCommand = decodeUtf8 $ BL.fromStrict command
 
 
-evaluateRuby ∷ AppSettings → String → IO String
-evaluateRuby settings code = do
-  log $ "evaluating ruby command: '" ⊕ code ⊕ "'"
-  executed <- readProcessWithExitCode "ruby" args ""
+evaluateCodeForeighnCall ∷ (a → b → IO (ExitCode, String, String)) → a → b → IO String
+evaluateCodeForeighnCall action settings code = do
+  executed <- action settings code
   case executed of
     (ExitSuccess, out, err) → do
       log $ "succeeded with '" ⊕ out ⊕ "'"
       return out
     (ExitFailure nr, out, err) → do
-      log $ "A call to the ruby command failed with code " ⊕ show nr
+      log $ "A call to the command failed with code " ⊕ show nr
       log $ "stdout: " ⊕ out
       log $ "stderr: " ⊕ err
-      return $ "Sorry, but calling 'ruby' with your input failed '" ⊕ err ⊕ "'"
+      return $ "Sorry, but calling with your input failed '" ⊕ err ⊕ "'"
 
+
+evaluateRuby ∷ AppSettings → String → IO String
+evaluateRuby = evaluateCodeForeighnCall rubyCommand
+
+
+rubyCommand ∷ AppSettings → String → IO (ExitCode, String, String)
+rubyCommand settings code = do
+  log $ "evaluating ruby command: '" ⊕ code ⊕ "'"
+  readProcessWithExitCode "ruby" args ""
   where
-    args = P.map ("-e " ⊕) $ P.lines code
+    args = "-e":(L.intersperse "-e" $ P.lines code)
+
+
+evaluatePython ∷ AppSettings → String → IO String
+evaluatePython = evaluateCodeForeighnCall pythonCommand
+
+
+pythonCommand ∷ AppSettings → String → IO (ExitCode, String, String)
+pythonCommand settings code = do
+  log $ "evaluating python command: '" ⊕ code ⊕ "'"
+  readProcessWithExitCode "python3" ["-c", code] ""
 
 
 truncateCommand ∷ ByteString → ByteString → ByteString
