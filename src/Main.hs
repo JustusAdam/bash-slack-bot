@@ -13,12 +13,12 @@ import           Data.Aeson                  as JSON
 import           Data.ByteString.Char8       as C hiding (putStrLn, unlines)
 import qualified Data.ByteString.Lazy        as BL
 import           Data.Char
+import           Data.Configurator           as Cf
 import qualified Data.List                   as L
 import           Data.Maybe
 import           Data.Monoid.Unicode
 import           Data.Text.Lazy              as T hiding (unpack)
 import           Data.Text.Lazy.Encoding
-import           Data.Yaml
 import           Network.Browser
 import           Network.HTTP                hiding (password, port)
 import           Network.HTTP.Types          hiding (POST)
@@ -89,9 +89,9 @@ evaluateCode
     case C.words truncated of
       (language:_:_) ->
         maybe
-          (return $ "Sorry, I could not find language '" ⊕ (decodeUtf8 (BL.fromStrict language)) ⊕ "'")
+          (return $ "Sorry, I could not find language '" ⊕ decodeUtf8 (BL.fromStrict language) ⊕ "'")
           (\f -> T.pack <$> f settings (C.unpack $ truncateCommand language truncated))
-          $ lookup language evaluableLanguages
+          $ P.lookup language evaluableLanguages
       [] -> return $ "What language should I interpret? The sytax is '" ⊕ textCommand ⊕ " <language> <code>.'"
       _ -> return "You didn't give me any code to execute"
   where
@@ -122,7 +122,7 @@ rubyCommand settings code = do
   log $ "evaluating ruby command: '" ⊕ code ⊕ "'"
   readProcessWithExitCode "ruby" args ""
   where
-    args = "-e":(L.intersperse "-e" $ P.lines code)
+    args = "-e":L.intersperse "-e" (P.lines code)
 
 
 evaluatePython ∷ AppSettings → String → IO String
@@ -171,22 +171,11 @@ addNew
           ]
 
 
-instance FromJSON AppSettings where
-  parseJSON (Object o) = AppSettings
-    <$> o .: "port"
-    ⊛ (fmap $ fmap C.pack) (o .:? "token")
-    ⊛ o .: "password"
-    ⊛ o .: "username"
-    ⊛ fmap (fromJust ∘ parseURI) (o .: "target")
-    ⊛ o .:? "min_quote_length"
-  parseJSON _ = mzero
-
-
 parseData ∷ [(ByteString, ByteString)] → Maybe HookData
 parseData params = HookData
-  <$> lookup "token" params
-  ⊛ lookup "trigger_word" params
-  ⊛ lookup "text" params
+  <$> P.lookup "token" params
+  ⊛ P.lookup "trigger_word" params
+  ⊛ P.lookup "text" params
 
 
 app ∷ AppSettings → Application
@@ -198,7 +187,7 @@ app settings@(AppSettings { appSettingsToken = expectedToken }) req respond = do
     Just postData@(HookData { hookDataToken = token, command = command, text = text }) →
       if verifier token
         then
-          case lookup command commands of
+          case P.lookup command commands of
             Nothing → respondFail
             Just action → do
               log $ "received new request for command " ⊕ C.unpack command
@@ -211,7 +200,7 @@ app settings@(AppSettings { appSettingsToken = expectedToken }) req respond = do
       logShow json
       respond $ responseLBS status200 [("Content-Type", "application/json")] $ JSON.encode json
       where
-        json = (SlackResponse message)
+        json = SlackResponse message
     respondFail =
       respond $ responseLBS badRequest400 [] $ JSON.encode $ SlackResponse "Sorry, something went wrong 😐"
 
@@ -220,18 +209,24 @@ main ∷ IO ()
 main = do
   log "Bash Slack Bot  -- Version: 0.1.0.0"
   [settingsFile] ← getArgs
-  sf ← decodeFile settingsFile
-  case sf of
-    Nothing → log "could not read settings"
-    Just conf → do
-      log "Starting server!"
-      log
-        $ printf
-          "Port: %d   Token: %s   Target URI: %s   with Username: %s   and Password: %s"
-          (port conf)
-          (maybe "-" (uncurry (⧺) ∘ second (flip P.replicate '*' ∘ P.length) ∘ P.splitAt 6 ∘ C.unpack) $ appSettingsToken conf)
-          (show $ uri conf)
-          (username conf)
-          (P.replicate (P.length $ password conf) '*')
+  sf ← load [Required settingsFile]
 
-      run (port conf) (app conf)
+  conf <- AppSettings
+            <$> require sf "server.port"
+            <*> Cf.lookup sf "bash.token"
+            <*> require sf "user.password"
+            <*> require sf "user.username"
+            <*> (fromMaybe (error "bash url must be a valid url") . parseURI <$> require sf "bash.target")
+            <*> Cf.lookup sf  "bash.min_quote_length"
+
+  log "Starting server!"
+  log
+    $ printf
+      "Port: %d   Token: %s   Target URI: %s   with Username: %s   and Password: %s"
+      (port conf)
+      (maybe "-" (uncurry (⧺) ∘ second (flip P.replicate '*' ∘ P.length) ∘ P.splitAt 6 ∘ C.unpack) $ appSettingsToken conf)
+      (show $ uri conf)
+      (username conf)
+      (P.replicate (P.length $ password conf) '*')
+
+  run (port conf) (app conf)

@@ -1,2 +1,4 @@
 dist
 config.yaml
+config.cfg
+.stack-work/
