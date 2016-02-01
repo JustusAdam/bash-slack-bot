@@ -1,32 +1,32 @@
+{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE LambdaCase #-}
-module Snap.Snaplet.SlackBot 
+module Snap.Snaplet.SlackBot
   ( initBot
   ) where
 
 
-import qualified Data.Configurator as Cf
-import Safe
-import Data.Aeson as JSON
-import Data.ByteString
-import Snap
-import Snap.Snaplet
-import Data.Text as T
-import Data.Maybe
-import Data.Monoid ((<>))
-import qualified Data.ByteString.Char8    as C hiding (putStrLn, unlines)
-import Data.Char
+import           Control.Applicative    ((<|>))
+import           Control.Category       ((>>>))
+import           Control.Monad          ((>=>))
+import           Control.Monad.IO.Class
+import           Data.Aeson             as JSON
+import           Data.ByteString
+import qualified Data.ByteString.Char8  as C hiding (putStrLn, unlines)
+import           Data.Char
+import qualified Data.Configurator      as Cf
+import qualified Data.Map.Lazy          as Map
+import           Data.Maybe
+import           Data.Monoid            ((<>))
+import           Data.Text              as T
 import           Network.Browser
-import Control.Monad ((>=>))
-import qualified Data.Map.Lazy as Map
-import System.IO as SIO (stderr, hPutStrLn)
-import Control.Monad.IO.Class
-import Control.Category ((>>>))
-import Network.URI
-import qualified Network.HTTP.Base as HTTPB
-import Control.Applicative ((<|>))
-import System.FilePath ((</>))
+import qualified Network.HTTP.Base      as HTTPB
+import           Network.URI
+import           Safe
+import           Snap
+import           Snap.Snaplet
+import           System.FilePath        ((</>))
+import           System.IO              as SIO (hPutStrLn, stderr)
 
 
 
@@ -70,11 +70,11 @@ commands = Map.fromList
 
 
 initBot :: Maybe FilePath -> SnapletInit b SlackBot
-initBot path = 
-  makeSnaplet 
+initBot path =
+  makeSnaplet
     "slack-bot"
-    "react to slack messages" 
-    (return <$> (path <|> Just "slack-bot")) 
+    "react to slack messages"
+    (return <$> (path <|> Just "slack-bot"))
     $ do
       cfg <- readSlackConfig $ fromMaybe "slack-bot" path </> "config.cfg"
       addRoutes [("", handler cfg)]
@@ -92,14 +92,14 @@ readSlackConfig path = liftIO $ do
     <*> (fromMaybe (error "bash url must be a valid url") . parseURI <$> Cf.require sf "bash.target")
     <*> Cf.lookup sf  "bash.min_quote_length"
 
- 
+
 truncateCommand :: ByteString -> ByteString -> ByteString
 truncateCommand command = C.dropWhile isSpace . C.drop (C.length command)
 
 
 handler :: BotSettings -> Handler b SlackBot ()
 handler settings@(BotSettings { appSettingsToken = expectedToken }) =
-  (parseData <$> getPostParams) >>= \case 
+  (parseData <$> getPostParams) >>= \case
     Nothing -> respondFail
     Just postData@(HookData { hookDataToken = token, command = command, text = text }) ->
       if maybe (const True) (==) expectedToken token
@@ -114,7 +114,7 @@ handler settings@(BotSettings { appSettingsToken = expectedToken }) =
   where
     respondSuccess message = do
         logShow json
-        modifyResponse 
+        modifyResponse
           $ setResponseCode 200
           >>> setContentType "application/json"
         writeLBS (JSON.encode json)
@@ -127,7 +127,7 @@ handler settings@(BotSettings { appSettingsToken = expectedToken }) =
 
 
 addNew :: BotSettings -> HookData -> Handler b SlackBot Text
-addNew 
+addNew
   (BotSettings { username, password, uri, minQuoteLength })
   (HookData { command, text }) =
     if lengthVerifier quote
@@ -146,15 +146,18 @@ addNew
             ) minQuoteLength
     where
       quote = truncateCommand command text
-      lengthVerifier = maybe (const True) (\a b -> a <= C.length b) minQuoteLength
-      req = formToRequest body
-      body =
-        Form
-          HTTPB.POST
-          uri
-          [ ("rash_quote", C.unpack quote)
-          , ("submit", "Add Quote")
-          ]
+      lengthVerifier =
+        maybe
+          (const True)
+          (\a b -> a <= C.length b)
+          minQuoteLength
+      req = formToRequest $
+          Form
+            HTTPB.POST
+            uri
+            [ ("rash_quote", C.unpack quote)
+            , ("submit", "Add Quote")
+            ]
 
 
 parseData :: Map.Map ByteString [ByteString] -> Maybe HookData

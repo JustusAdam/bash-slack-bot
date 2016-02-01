@@ -1,10 +1,10 @@
 module Main where
 
 
-import Snap
-import Snap.Snaplet.SlackBot
+import           Snap
+import           Snap.Snaplet.SlackBot
 
 
-main = do 
+main = do
     cfg <- commandLineConfig emptyConfig
     serveSnaplet cfg (initBot Nothing)
