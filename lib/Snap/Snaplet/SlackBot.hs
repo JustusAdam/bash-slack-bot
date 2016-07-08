@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Snap.Snaplet.SlackBot
   ( initBot
+  , SlackBot
   ) where
 
 
@@ -165,6 +166,3 @@ parseData params = HookData
   <$> (Map.lookup "token" params >>= headMay)
   <*> (Map.lookup "trigger_word" params >>= headMay)
   <*> (Map.lookup "text" params >>= headMay)
-
-
-

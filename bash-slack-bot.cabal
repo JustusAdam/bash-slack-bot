@@ -18,7 +18,7 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs: lib
-  exposed-modules: 
+  exposed-modules:
       Snap.Snaplet.SlackBot
   build-depends:
     base >=4.6 && <5.0,
@@ -33,10 +33,10 @@ library
     network-uri,
     transformers,
     filepath
-  
 
 
-executable bash-slack-bot
+
+executable bash-slack-bot-exec
   main-is:             Main.hs
   -- other-modules:
   -- other-extensions:
@@ -55,6 +55,7 @@ executable bash-slack-bot
     text,
     process,
     snap,
-    safe
+    safe,
+    bash-slack-bot
   hs-source-dirs:      src
   default-language:    Haskell2010
