@@ -7,4 +7,4 @@ import           Snap.Snaplet.SlackBot
 
 main = do
     cfg <- commandLineConfig emptyConfig
-    serveSnaplet cfg (initBot Nothing)
+    serveSnaplet cfg initBot

@@ -37,15 +37,6 @@ data HookData = HookData { hookDataToken :: ByteString
                          } deriving (Show)
 
 
-data BotSettings = BotSettings { port             :: Int
-                               , appSettingsToken :: Maybe ByteString
-                               , password         :: String
-                               , username         :: String
-                               , uri              :: URI
-                               , minQuoteLength   :: Maybe Int
-                               } deriving (Show)
-
-
 newtype SlackResponse = SlackResponse Text deriving (Show)
 
 
@@ -64,53 +55,40 @@ logShow :: (MonadIO m, Show s) => s -> m ()
 logShow = logMsg . show
 
 
-commands :: Map.Map ByteString (BotSettings -> HookData -> Handler b SlackBot Text)
+commands :: Map.Map ByteString (HookData -> Handler b SlackBot Text)
 commands = Map.fromList
   [ ("bashthis:", addNew)
   ]
 
 
-initBot :: Maybe FilePath -> SnapletInit b SlackBot
-initBot path =
-  makeSnaplet
-    "slack-bot"
-    "react to slack messages"
-    (return <$> (path <|> Just "slack-bot"))
-    $ do
-      cfg <- readSlackConfig $ fromMaybe "slack-bot" path </> "config.cfg"
-      addRoutes [("", handler cfg)]
-      return SlackBot
+require cfg = liftIO . Cf.require cfg
+lookupcfg cfg = liftIO . Cf.lookup cfg
 
 
-readSlackConfig :: MonadIO m => FilePath -> m BotSettings
-readSlackConfig path = liftIO $ do
-  sf <- (Cf.load [Cf.Required path])
-  BotSettings
-    <$> Cf.require sf "server.port"
-    <*> Cf.lookup sf "bash.token"
-    <*> Cf.require sf "user.password"
-    <*> Cf.require sf "user.username"
-    <*> (fromMaybe (error "bash url must be a valid url") . parseURI <$> Cf.require sf "bash.target")
-    <*> Cf.lookup sf  "bash.min_quote_length"
+initBot :: SnapletInit b SlackBot
+initBot = makeSnaplet "slack-bot" "react to slack messages" Nothing $ do
+    addRoutes [("", handler)]
+    return SlackBot
 
 
 truncateCommand :: ByteString -> ByteString -> ByteString
 truncateCommand command = C.dropWhile isSpace . C.drop (C.length command)
 
 
-handler :: BotSettings -> Handler b SlackBot ()
-handler settings@(BotSettings { appSettingsToken = expectedToken }) =
+handler :: Handler b SlackBot ()
+handler = do
+  expectedToken <- getSnapletUserConfig >>= flip lookupcfg "bash.token"
   (parseData <$> getPostParams) >>= \case
     Nothing -> respondFail
     Just postData@(HookData { hookDataToken = token, command = command, text = text }) ->
-      if maybe (const True) (==) expectedToken token
-        then
+      case expectedToken of
+        Just t | t /= token -> logMsg "Token did not match" >> respondFail
+        _ ->
           case Map.lookup command commands of
             Nothing -> respondFail
             Just action -> do
               logMsg $ "received new request for command " <> C.unpack command
-              action settings postData >>= respondSuccess
-        else logMsg "Token did not match" >> respondFail
+              action postData >>= respondSuccess
 
   where
     respondSuccess message = do
@@ -127,10 +105,26 @@ handler settings@(BotSettings { appSettingsToken = expectedToken }) =
 
 
 
-addNew :: BotSettings -> HookData -> Handler b SlackBot Text
-addNew
-  (BotSettings { username, password, uri, minQuoteLength })
-  (HookData { command, text }) =
+addNew :: HookData -> Handler b SlackBot Text
+addNew (HookData { command, text }) = do
+    config <- getSnapletUserConfig
+    username <- require config "user.username"
+    password <- require config "user.password"
+    uri <- fromMaybe (error "bash url must be a valid url") . parseURI <$> require config "bash.target"
+    minQuoteLength <- lookupcfg config "bash.min_quote_length"
+    let quote = truncateCommand command text
+        lengthVerifier =
+          maybe
+            (const True)
+            (\a b -> a <= C.length b)
+            minQuoteLength
+        req = formToRequest $
+            Form
+              HTTPB.POST
+              uri
+              [ ("rash_quote", C.unpack quote)
+              , ("submit", "Add Quote")
+              ]
     if lengthVerifier quote
       then liftIO $ browse $ do
         setAuthorityGen (\_ _ -> return $ return (username, password))
@@ -145,20 +139,6 @@ addNew
               <> T.pack (show (required - C.length quote))
               <> " characters longer."
             ) minQuoteLength
-    where
-      quote = truncateCommand command text
-      lengthVerifier =
-        maybe
-          (const True)
-          (\a b -> a <= C.length b)
-          minQuoteLength
-      req = formToRequest $
-          Form
-            HTTPB.POST
-            uri
-            [ ("rash_quote", C.unpack quote)
-            , ("submit", "Add Quote")
-            ]
 
 
 parseData :: Map.Map ByteString [ByteString] -> Maybe HookData
