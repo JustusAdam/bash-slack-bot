@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns      #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -86,9 +87,7 @@ handler = do
         _ ->
           case Map.lookup command commands of
             Nothing -> respondFail
-            Just action -> do
-              logMsg $ "received new request for command " <> C.unpack command
-              action postData >>= respondSuccess
+            Just action -> action postData >>= respondSuccess
 
   where
     respondSuccess message = do
@@ -110,7 +109,7 @@ addNew (HookData { command, text }) = do
     config <- getSnapletUserConfig
     username <- require config "user.username"
     password <- require config "user.password"
-    uri <- fromMaybe (error "bash url must be a valid url") . parseURI <$> require config "bash.target"
+    !uri <- fromMaybe (error "bash url must be a valid url") . parseURI <$> require config "bash.target"
     minQuoteLength <- lookupcfg config "bash.min_quote_length"
     let quote = truncateCommand command text
         lengthVerifier =

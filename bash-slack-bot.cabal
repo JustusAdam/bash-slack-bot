@@ -33,6 +33,7 @@ library
     network-uri,
     transformers,
     filepath
+  default-language: Haskell2010
 
 
 
